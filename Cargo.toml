@@ -9,7 +9,7 @@ license = "Apache-2.0 OR MIT"
 [dependencies]
 argon2 = { version = "0.5.1", features = ["std"] }
 async-trait = "0.1.64"
-bankid = { git = "https://github.com/necessary-nu/bankid-rs", optional = true }
+bankid = { git = "https://github.com/meelahealth/bankid-rs", optional = true }
 base64 = "0.22.0"
 chrono = { version = "0.4.23", features = ["serde"] }
 deadpool-redis = "0.14.0"
