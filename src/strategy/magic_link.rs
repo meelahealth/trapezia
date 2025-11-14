@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
+use deadpool_redis::redis::cmd;
 use rand::distributions::{Distribution, Uniform};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use uuid::Uuid;
@@ -164,7 +165,7 @@ where
     ) -> Result<(), Self::Error> {
         let mut conn = self.pool.get().await?;
 
-        redis::cmd("SET")
+        cmd("SET")
             .arg(format!("{PREFIX}/magic-link/{}", &magic_link.identity_key))
             .arg(
                 serde_json::to_string(&MagicLinkPayload {
@@ -176,7 +177,7 @@ where
             )
             .arg("EXAT")
             .arg(expires_at.timestamp())
-            .query_async::<_, ()>(&mut conn)
+            .query_async::<()>(&mut conn)
             .await?;
 
         Ok(())
@@ -189,10 +190,7 @@ where
     ) -> Result<Option<MagicLinkPayload<Self::MagicLinkData>>, Self::Error> {
         let mut conn = self.pool.get().await?;
         let id_token_key = format!("{PREFIX}/magic-link/{identity_key}");
-        let result: Option<String> = redis::cmd("GET")
-            .arg(&id_token_key)
-            .query_async(&mut conn)
-            .await?;
+        let result: Option<String> = cmd("GET").arg(&id_token_key).query_async(&mut conn).await?;
         let Some(result) = result else {
             return Ok(None);
         };
@@ -232,10 +230,7 @@ where
 
         let key = format!("{PREFIX}/magic-link/{identity_key}");
 
-        let result: Option<String> = redis::cmd("GETDEL")
-            .arg(&key)
-            .query_async(&mut conn)
-            .await?;
+        let result: Option<String> = cmd("GETDEL").arg(&key).query_async(&mut conn).await?;
 
         if result.is_none() {
             return Err(session::redis::Error::KeyNotFound(key));

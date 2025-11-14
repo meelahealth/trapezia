@@ -10,6 +10,7 @@ pub use bankid::{
     model::{CollectPayload, CompletionData},
 };
 use chrono::{DateTime, Duration, Utc};
+use deadpool_redis::redis::cmd;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
@@ -111,12 +112,12 @@ where
         let start_time = Utc::now();
         let expires_at = start_time + Duration::seconds(60);
 
-        redis::cmd("SET")
+        cmd("SET")
             .arg(format!("{PREFIX}/bankid/{}", &payload.order_ref))
             .arg(serde_json::to_string(&payload).unwrap())
             .arg("EXAT")
             .arg(expires_at.timestamp())
-            .query_async::<_, ()>(&mut conn)
+            .query_async::<()>(&mut conn)
             .await?;
         Ok(())
     }
@@ -124,7 +125,7 @@ where
     async fn auth_payload(&self, order_ref: &str) -> Result<BankIdAuthPayload, Self::Error> {
         let mut conn = self.pool.get().await?;
         let order_ref_key = format!("{PREFIX}/bankid/{order_ref}");
-        let result: Option<String> = redis::cmd("GET")
+        let result: Option<String> = cmd("GET")
             .arg(&order_ref_key)
             .query_async(&mut conn)
             .await?;

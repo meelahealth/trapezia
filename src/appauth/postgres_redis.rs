@@ -1,6 +1,8 @@
 use async_trait::async_trait;
-use deadpool_redis::PoolError;
-use redis::RedisError;
+use deadpool_redis::{
+    redis::{cmd, RedisError},
+    PoolError,
+};
 use secrecy::ExposeSecret;
 use sqlx::PgPool;
 
@@ -46,7 +48,7 @@ async fn set_redis_token(
     appauth: &AppAuth,
 ) -> Result<(), PoolError> {
     let mut conn = redis_pool.get().await?;
-    let mut q = redis::cmd("SET");
+    let mut q = cmd("SET");
     let mut q = q
         .arg(format!("appauth/{}", *appauth.id))
         .arg(appauth.token.expose_secret());
@@ -55,7 +57,7 @@ async fn set_redis_token(
         q = q.arg("EXAT").arg(expiry.timestamp());
     }
 
-    q.query_async::<_, ()>(&mut conn).await?;
+    q.query_async::<()>(&mut conn).await?;
 
     Ok(())
 }
@@ -76,7 +78,7 @@ impl super::AppAuthBackend for Backend {
     async fn verify_token(&self, id: AppAuthId, token: &str) -> Result<(), Self::Error> {
         let mut conn = self.redis_pool.get().await?;
 
-        let redis_token: Option<String> = redis::cmd("GET")
+        let redis_token: Option<String> = cmd("GET")
             .arg(format!("appauth/{}", *id))
             .query_async(&mut conn)
             .await?;

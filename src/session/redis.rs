@@ -2,8 +2,10 @@ use std::marker::PhantomData;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
-use deadpool_redis::{Config, Runtime};
-use redis::FromRedisValue;
+use deadpool_redis::{
+    redis::{cmd, pipe, FromRedisValue, RedisError, RedisResult, Value},
+    Config, Runtime,
+};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use super::SessionId;
@@ -45,7 +47,7 @@ pub enum Error {
     Pool(#[from] deadpool_redis::PoolError),
 
     #[error("Redis error")]
-    Redis(#[from] redis::RedisError),
+    Redis(#[from] RedisError),
 
     #[error("Json parsing error")]
     Json(#[from] serde_json::Error),
@@ -78,7 +80,7 @@ impl From<i64> for Ttl {
 }
 
 impl FromRedisValue for Ttl {
-    fn from_redis_value(v: &redis::Value) -> redis::RedisResult<Self> {
+    fn from_redis_value(v: &Value) -> RedisResult<Self> {
         i64::from_redis_value(v).map(Ttl::from)
     }
 }
@@ -104,12 +106,12 @@ where
             data,
             expires_at,
         };
-        redis::cmd("SET")
+        cmd("SET")
             .arg(format!("{PREFIX}/session/{}", session_id))
             .arg(serde_json::to_string(&session.data).unwrap())
             .arg("EXAT")
             .arg(expires_at.timestamp())
-            .query_async::<_, ()>(&mut conn)
+            .query_async::<()>(&mut conn)
             .await?;
         Ok(session)
     }
@@ -124,7 +126,7 @@ where
 
         let (session_data, ttl): (Option<String>, Ttl) = match extend_expiry {
             Some(expiry) => {
-                redis::pipe()
+                pipe()
                     .atomic()
                     .cmd("GETEX")
                     .arg(&session_key)
@@ -136,7 +138,7 @@ where
                     .await?
             }
             None => {
-                redis::pipe()
+                pipe()
                     .atomic()
                     .cmd("GET")
                     .arg(&session_key)
@@ -175,9 +177,9 @@ where
 
     async fn expire(&self, session: SessionId) -> Result<(), Self::Error> {
         let mut conn = self.pool.get().await?;
-        redis::cmd("DEL")
+        cmd("DEL")
             .arg(format!("{PREFIX}/session/{}", session))
-            .query_async::<_, ()>(&mut conn)
+            .query_async::<()>(&mut conn)
             .await?;
         Ok(())
     }
